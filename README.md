@@ -1,6 +1,6 @@
 # XAI-based Data Quality Diagnosis Framework
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A framework for diagnosing data quality problems in machine learning pipelines using Explainable AI (XAI) techniques.
@@ -104,7 +104,11 @@ xai/
 │   ├── visualizer.py           # Result visualization
 │   ├── dataset_registry.py      # Dataset registry
 │   ├── loaders/                 # Dataset-specific loaders
-│   └── config.py               # Configuration settings
+│   ├── config.py               # Configuration settings
+│   ├── run_multi_dataset_experiments.py  # Main tree-model experiments
+│   ├── run_extended_experiments.py       # MAR comparison + DL experiments
+│   ├── run_mlp_ig_divergence.py          # MLP + IG FI Divergence (Table 9/H6)
+│   └── run_redundancy_robustness_experiments.py  # Conditions-of-detection (Tables 13-14)
 ├── data/
 │   ├── raw/                    # Raw dataset files (not included)
 │   └── processed/              # Preprocessed data (not included)
@@ -161,10 +165,17 @@ python src/run_multi_dataset_experiments.py
 # Extended experiments: runs BOTH the MAR-vs-MCAR comparison and the
 # deep-learning (MLP + Integrated Gradients) FI-divergence experiments
 python src/run_extended_experiments.py
+
+# MLP + Integrated Gradients FI Divergence (Table 9 / H6, 5-fold CV)
+python src/run_mlp_ig_divergence.py
+
+# Conditions-of-detection: redundancy ablation (Table 13) + robustness sweep (Table 14)
+python src/run_redundancy_robustness_experiments.py
 ```
 
-> Together with the deep-learning runs, these cover the full **1,080 conditions**
-> (4 datasets × quality types × severities × models) reported in the paper.
+> Together these cover the full **1,080 conditions**
+> (4 datasets × quality types × severities × models) reported in the paper,
+> plus the controlled redundancy/robustness analysis (Tables 13-14).
 
 ### Configuration
 
@@ -189,16 +200,16 @@ Based on experiments across 1,080+ conditions:
 | < 0.005 | Normal variation | Continue monitoring |
 | 0.005 - 0.01 | Minor concern | Investigate affected features |
 | 0.01 - 0.02 | Moderate issue | Root cause analysis required |
-| > 0.02 | Severe problem | Halt pipeline, remediate data |
+| > 0.02 | Severe problem | Pause deployment pending validation; remediate data |
 
 ## Key Results
 
 - **H1**: XAI detects quality problems across all 1,080 conditions (FI Divergence > 0)
-- **H2**: XGBoost shows 54% higher sensitivity than RandomForest
-- **H3**: Monotonic severity-divergence relationship (r = 0.94)
+- **H2**: XGBoost shows 52% higher sensitivity than RandomForest (Cohen's d = 0.44)
+- **H3**: Monotonic severity-divergence relationship (median ρ = 1.00, 92% of conditions strictly monotonic)
 - **H4**: Framework generalizes across 4 diverse domains
-- **H5**: MAR produces 20.7% higher FI Divergence than MCAR
-- **H6**: Deep learning outlier detection shows highest sensitivity (JS = 0.0602)
+- **H5**: MAR produces 20.7% higher FI Divergence than MCAR (model-dependent; concentrated in XGBoost)
+- **H6**: Deep learning outlier detection shows highest sensitivity (JS = 0.1394)
 
 ## Citation
 
