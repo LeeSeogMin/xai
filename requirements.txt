@@ -1,34 +1,53 @@
+# =============================================================================
+# Pinned dependencies for reproducibility (verified on macOS arm64 + Windows).
+#
+# IMPORTANT: Use Python 3.11 (tested: 3.11.x). The original experiments were run
+# on Windows; this exact stack was re-verified end-to-end on macOS (Apple Silicon).
+#
+# Why pinned: with unpinned (>=) ranges a fresh install on Python 3.14 resolves to
+# numpy 2.x / torch 2.12 / xgboost 3.2, which segfaults on macOS due to a duplicate
+# OpenMP runtime (torch and xgboost each load their own libomp). Pinning the stack
+# below avoids that and makes results reproducible across Mac and Windows.
+#   pip install -r requirements.txt
+# =============================================================================
+
 # Core ML libraries
-numpy>=1.21.0
-pandas>=1.3.0
-scikit-learn>=1.0.0
+numpy==1.26.4
+pandas==2.1.4
+scikit-learn==1.3.2
 
 # XGBoost
-xgboost>=1.5.0
+xgboost==2.0.3
 
 # Deep Learning
-torch>=1.10.0
+torch==2.2.2
 
 # XAI libraries
-shap>=0.41.0
-lime>=0.2.0.1
-captum>=0.5.0
+shap==0.44.1
+lime==0.2.0.1
+captum==0.7.0
 
 # Statistical analysis
-scipy>=1.7.0
-statsmodels>=0.13.0
+scipy==1.11.4
+statsmodels==0.14.1
 
 # Visualization
-matplotlib>=3.4.0
-seaborn>=0.11.0
+matplotlib==3.8.2
+seaborn==0.13.1
 
 # Utilities
-tqdm>=4.62.0
-PyYAML>=6.0
+tqdm==4.66.1
+PyYAML==6.0.1
 
 # Imbalanced learning
-imbalanced-learn>=0.9.0
+imbalanced-learn==0.12.0
 
-# Optional: Jupyter notebooks
-jupyter>=1.0.0
-ipykernel>=6.0.0
+# Binary-sensitive transitive deps pinned to keep the OpenMP/SHAP stack stable
+# (these exact versions were the ones verified end-to-end; both ship cp311
+#  wheels for macOS arm64 and Windows amd64)
+numba==0.65.1
+llvmlite==0.47.0
+
+# Optional: Jupyter notebooks (not required to reproduce experiments)
+# jupyter==1.0.0
+# ipykernel==6.29.5

@@ -21,7 +21,9 @@ This repository contains the implementation of the **XAI-based Data Quality Diag
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- **Python 3.11** (required). The dependency stack in `requirements.txt` is pinned
+  to versions verified on Python 3.11; newer interpreters (3.13/3.14) pull
+  incompatible binary wheels.
 - pip package manager
 
 ### Setup
@@ -31,13 +33,25 @@ This repository contains the implementation of the **XAI-based Data Quality Diag
 git clone https://github.com/LeeSeogMin/xai.git
 cd xai
 
-# Create virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Create virtual environment with Python 3.11 (recommended)
+python3.11 -m venv venv
+source venv/bin/activate          # On Windows: venv\Scripts\activate
 
-# Install dependencies
+# Install pinned dependencies
 pip install -r requirements.txt
 ```
+
+### Platform compatibility (macOS / Windows)
+
+The original experiments were run on Windows; the full pipeline has also been
+re-verified end-to-end on macOS (Apple Silicon) with the pinned stack above.
+
+`requirements.txt` uses **exact version pins** on purpose. With loose (`>=`)
+ranges, a fresh install on a recent Python resolves to `numpy 2.x` / `torch 2.12`
+/ `xgboost 3.2`, which **segfaults on macOS** because PyTorch and XGBoost each
+load their own OpenMP runtime (`libomp`). The pinned versions avoid this and
+produce identical behavior on Mac and Windows. If you must use a different stack,
+keep PyTorch and XGBoost on versions built against a compatible OpenMP runtime.
 
 ## Dataset Access
 
@@ -141,29 +155,29 @@ print(f"JS Divergence: {divergence['js']:.4f}")
 ### Running Full Experiments
 
 ```bash
-# Multi-dataset experiments (960 conditions)
+# Multi-dataset experiments (tree models across all datasets/quality types/severities)
 python src/run_multi_dataset_experiments.py
 
-# MAR vs MCAR comparison
-python src/run_extended_experiments.py --experiment mar
-
-# Deep learning experiments
-python src/run_extended_experiments.py --experiment deep_learning
+# Extended experiments: runs BOTH the MAR-vs-MCAR comparison and the
+# deep-learning (MLP + Integrated Gradients) FI-divergence experiments
+python src/run_extended_experiments.py
 ```
+
+> Together with the deep-learning runs, these cover the full **1,080 conditions**
+> (4 datasets × quality types × severities × models) reported in the paper.
 
 ### Configuration
 
-Edit `src/config.py` to customize:
+Edit the module-level constants in `src/config.py` to customize:
 
 ```python
-CONFIG = {
-    'datasets': ['adult', 'unsw', 'creditcard', 'bank'],
-    'quality_types': ['missing', 'outlier', 'shift'],
-    'severities': [0.05, 0.10, 0.20, 0.30],
-    'models': ['rf', 'xgboost'],
-    'cv_folds': 10,
-    'random_seed': 42
-}
+RANDOM_SEED = 42
+DATASETS = ['uci_adult', 'unsw_nb15', 'creditcard', 'bank_marketing']
+QUALITY_ISSUE_TYPES = ['missing', 'outlier', 'distribution_shift']
+SEVERITY_LEVELS = [0.05, 0.10, 0.20, 0.30]
+N_FOLDS = 10                      # tree-model cross-validation folds
+# Model hyperparameters live in MODEL_CONFIGS (RandomForest, XGBoost)
+# Deep-learning settings: DL_MODELS, DL_EPOCHS, DL_BATCH_SIZE, IG_N_STEPS, ...
 ```
 
 ## FI Divergence Thresholds
