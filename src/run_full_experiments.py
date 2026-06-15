@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-Full Experiment Runner - Phase 5
-실제 실험 실행 스크립트
-
-모든 실험을 실제로 실행하고 결과를 JSON으로 저장합니다.
-- 다중 데이터셋: UCI Adult
-- 모델: RandomForest, XGBoost, MLP, AttentionNet
-- XAI 방법: SHAP, LIME, Integrated Gradients, Attention
-- 통계 검증: 10-fold CV, 95% CI, paired t-test, Cohen's d
-- 전통적 방법: Z-score, IQR, KS test, PSI
-"""
+'Full experiment runner that executes model, XAI, statistical, and baseline comparisons.'
 
 import os
 import sys
@@ -23,10 +13,8 @@ warnings.filterwarnings('ignore')
 
 # Add paths
 CODE_DIR = Path(__file__).parent
-PHASE5_DIR = CODE_DIR.parent
-PROJECT_ROOT = PHASE5_DIR.parent
+PROJECT_ROOT = CODE_DIR.parent
 sys.path.insert(0, str(CODE_DIR))
-sys.path.insert(0, str(PROJECT_ROOT / 'phase4_data'))
 
 from config import (
     RANDOM_SEED, RESULTS_DIR, MODELS_DIR, FIGURES_DIR,
@@ -35,11 +23,11 @@ from config import (
     DL_EPOCHS, DL_BATCH_SIZE, DL_LEARNING_RATE, DEVICE
 )
 
-# phase4_data imports
+# Local data and quality simulation imports
 from data_loader import prepare_dataset, NUMERICAL_COLS, CATEGORICAL_COLS
 from quality_simulator import inject_missing_values, inject_outliers, inject_distribution_shift
 
-# phase5 imports
+# Model and experiment imports
 from models import create_model, train_model, evaluate_model
 from xai_analyzer import analyze_xai, SHAPAnalyzer
 from metrics import calculate_fi_divergence_metrics
@@ -57,13 +45,13 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 
 def run_baseline_experiments():
-    """베이스라인 실험: ML 모델 + SHAP"""
+    'Run baseline experiments.'
     print("\n" + "=" * 70)
     print("Step 1: Baseline Experiments (RF, XGBoost + SHAP)")
     print("=" * 70)
 
-    # 데이터 로드
-    print("\n[데이터 로드 중...]")
+
+    print("\n[Loading data...]")
     data = prepare_dataset(scale=True)
     X_train = data['X_train']
     y_train = data['y_train']
@@ -81,22 +69,22 @@ def run_baseline_experiments():
         'models': {}
     }
 
-    # ML 모델 실험
+
     for model_name in ['random_forest', 'xgboost']:
         print(f"\n[{model_name.upper()}]")
 
-        # 모델 학습
+
         model = create_model(model_name)
         model = train_model(model, X_train, y_train)
 
-        # 평가
+
         metrics = evaluate_model(model, X_test, y_test)
         print(f"  Accuracy: {metrics['accuracy']:.4f}")
         print(f"  F1: {metrics['f1']:.4f}")
         print(f"  AUC: {metrics['roc_auc']:.4f}")
 
-        # SHAP 분석
-        print(f"  SHAP 분석 중...")
+
+        print("  Running SHAP analysis...")
         shap_importance = analyze_xai(model, X_train, X_test, method='shap', n_samples=100)
         fi_dict = shap_importance.to_dict()
 
@@ -110,17 +98,17 @@ def run_baseline_experiments():
 
 
 def run_cross_validation_experiments():
-    """10-fold CV 실험"""
+    'Run cross validation experiments.'
     print("\n" + "=" * 70)
     print("Step 2: 10-Fold Cross-Validation")
     print("=" * 70)
 
-    # 데이터 로드
+
     data = prepare_dataset(scale=True)
     X = pd.concat([data['X_train'], data['X_test']], axis=0).reset_index(drop=True)
     y = pd.concat([data['y_train'], data['y_test']], axis=0).reset_index(drop=True)
 
-    print(f"\n[데이터] X: {X.shape}, y: {y.shape}")
+    print(f"\n[Data] X: {X.shape}, y: {y.shape}")
 
     validator = StatisticalValidator(n_folds=N_FOLDS, random_state=RANDOM_SEED)
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_SEED)
@@ -142,9 +130,9 @@ def run_cross_validation_experiments():
             fold_metrics.append(metrics)
 
             if (fold_idx + 1) % 5 == 0:
-                print(f"  Fold {fold_idx+1}/{N_FOLDS} 완료")
+                print(f"  Fold {fold_idx+1}/{N_FOLDS} complete")
 
-        # 통계 집계
+
         metrics_df = pd.DataFrame(fold_metrics)
         stats = {}
 
@@ -187,18 +175,18 @@ def run_cross_validation_experiments():
 
 
 def run_quality_degradation_experiments():
-    """품질 저하 실험"""
+    'Run quality degradation experiments.'
     print("\n" + "=" * 70)
     print("Step 3: Quality Degradation Experiments")
     print("=" * 70)
 
-    data = prepare_dataset(scale=False)  # 품질 저하 주입을 위해 스케일링 안함
+    data = prepare_dataset(scale=False)
     X_train = data['X_train']
     y_train = data['y_train']
     X_test = data['X_test']
     y_test = data['y_test']
 
-    # 수치형 컬럼만 사용
+
     num_cols = [c for c in NUMERICAL_COLS if c in X_test.columns]
 
     results = {'issue_types': QUALITY_ISSUE_TYPES, 'severity_levels': SEVERITY_LEVELS, 'experiments': []}
@@ -206,16 +194,16 @@ def run_quality_degradation_experiments():
     for model_name in ['random_forest', 'xgboost']:
         print(f"\n[{model_name.upper()}]")
 
-        # 베이스라인 모델 학습
+
         model = create_model(model_name)
         model = train_model(model, X_train, y_train)
 
-        # 베이스라인 FI
+
         fi_baseline = analyze_xai(model, X_train, X_test, method='shap', n_samples=100)
 
         for issue_type in QUALITY_ISSUE_TYPES:
             for severity in SEVERITY_LEVELS:
-                # 품질 저하 주입
+
                 if issue_type == 'missing':
                     X_degraded, affected = inject_missing_values(
                         X_test.copy(), num_cols, severity, return_affected=True
@@ -231,10 +219,10 @@ def run_quality_degradation_experiments():
                         shift_type='covariate_shift', return_affected=True
                     )
 
-                # 저하된 데이터로 XAI 분석
+
                 fi_degraded = analyze_xai(model, X_train, X_degraded, method='shap', n_samples=100)
 
-                # FI Divergence 계산
+
                 div_metrics = calculate_fi_divergence_metrics(fi_baseline, fi_degraded)
 
                 experiment = {
@@ -255,7 +243,7 @@ def run_quality_degradation_experiments():
 
 
 def run_deep_learning_experiments():
-    """딥러닝 모델 실험"""
+    'Run deep learning experiments.'
     print("\n" + "=" * 70)
     print("Step 4: Deep Learning Experiments (MLP, AttentionNet)")
     print("=" * 70)
@@ -267,7 +255,7 @@ def run_deep_learning_experiments():
     y_test = data['y_test'].values
     feature_names = data['feature_names']
 
-    print(f"\n[데이터] X_train: {X_train.shape}, Device: {DEVICE}")
+    print(f"\n[Data] X_train: {X_train.shape}, Device: {DEVICE}")
 
     results = {}
 
@@ -301,7 +289,7 @@ def run_deep_learning_experiments():
     print(f"  AUC: {mlp_metrics['roc_auc']:.4f}")
 
     # Integrated Gradients
-    print(f"  Integrated Gradients 분석 중...")
+    print("  Running Integrated Gradients analysis...")
     dl_analyzer = DLXAIAnalyzer(mlp_wrapper.model, device=DEVICE)
     X_sample = mlp_wrapper.scaler.transform(X_test[:100])
     ig_importance = dl_analyzer.get_feature_importance(X_sample, method='integrated_gradients')
@@ -342,7 +330,7 @@ def run_deep_learning_experiments():
     print(f"  AUC: {attn_metrics['roc_auc']:.4f}")
 
     # Attention weights
-    print(f"  Attention 가중치 추출 중...")
+    print("  Extracting attention weights...")
     attn_wrapper.model.eval()
     with torch.no_grad():
         X_sample_tensor = torch.FloatTensor(X_sample).to(DEVICE)
@@ -359,7 +347,7 @@ def run_deep_learning_experiments():
 
 
 def run_traditional_baselines():
-    """전통적 방법 비교"""
+    'Run traditional baselines.'
     print("\n" + "=" * 70)
     print("Step 5: Traditional Baselines Comparison")
     print("=" * 70)
@@ -368,7 +356,7 @@ def run_traditional_baselines():
     X_test = data['X_test']
     num_cols = [c for c in NUMERICAL_COLS if c in X_test.columns]
 
-    # 이상치 주입
+
     X_degraded, affected_cols = inject_outliers(X_test.copy(), num_cols, 0.1, return_affected=True)
 
     print(f"\n[Outlier Injection: 10%, Affected: {affected_cols}]")
@@ -414,14 +402,14 @@ def run_traditional_baselines():
     }
     print(f"  Detected: {psi_result['affected_features']}")
 
-    # XAI 비교
+
     print("\n[XAI (SHAP) Detection]")
     model = create_model('random_forest')
     model = train_model(model, data['X_train'], data['y_train'])
     fi_baseline = analyze_xai(model, data['X_train'], X_test, method='shap', n_samples=100)
     fi_degraded = analyze_xai(model, data['X_train'], X_degraded, method='shap', n_samples=100)
 
-    # FI 변화 기반 탐지
+
     fi_change = abs(fi_baseline - fi_degraded) / (fi_baseline + 1e-10)
     top_changed = fi_change.nlargest(5).index.tolist()
 
@@ -431,7 +419,7 @@ def run_traditional_baselines():
     }
     print(f"  Top Changed: {top_changed}")
 
-    # 정확도 계산
+
     true_affected = set(affected_cols)
 
     for method in ['zscore', 'iqr', 'ks_test', 'psi']:
@@ -445,7 +433,7 @@ def run_traditional_baselines():
         results[method]['recall'] = recall
         results[method]['f1'] = f1
 
-    # XAI 정확도
+
     detected_xai = set(top_changed[:len(affected_cols)])
     tp_xai = len(true_affected & detected_xai)
     results['xai_shap']['precision'] = tp_xai / len(detected_xai) if len(detected_xai) > 0 else 0
@@ -462,12 +450,12 @@ def run_traditional_baselines():
 
 
 def run_all_experiments():
-    """전체 실험 실행"""
+    'Run the full experiment suite.'
     print("=" * 70)
     print("Full Experiment Runner - Phase 5")
-    print(f"시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"디바이스: {DEVICE}")
-    print(f"재현성 시드: {RANDOM_SEED}")
+    print(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Device: {DEVICE}")
+    print(f"Random seed: {RANDOM_SEED}")
     print("=" * 70)
 
     all_results = {
@@ -500,7 +488,7 @@ def run_all_experiments():
     traditional_results = run_traditional_baselines()
     all_results['traditional_baselines'] = traditional_results
 
-    # 결과 저장
+
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     output_file = RESULTS_DIR / f'full_experiment_results_{timestamp}.json'
 
@@ -508,9 +496,9 @@ def run_all_experiments():
         json.dump(all_results, f, indent=2, ensure_ascii=False)
 
     print("\n" + "=" * 70)
-    print("실험 완료!")
-    print(f"결과 저장: {output_file}")
-    print(f"종료 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print('Full experiment run complete!')
+    print(f"Saved results: {output_file}")
+    print(f"End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 
     return all_results, output_file
@@ -518,4 +506,4 @@ def run_all_experiments():
 
 if __name__ == '__main__':
     results, output_path = run_all_experiments()
-    print(f"\n결과 파일: {output_path}")
+    print(f"\nResult file: {output_path}")

@@ -1,7 +1,4 @@
-"""
-모델 학습 및 평가 모듈
-Phase 5: 실험 수행
-"""
+'Machine learning model creation, training, evaluation, and persistence utilities.'
 
 import numpy as np
 import pandas as pd
@@ -10,29 +7,35 @@ from sklearn.metrics import (
     accuracy_score, precision_score, recall_score,
     f1_score, roc_auc_score, classification_report
 )
-from xgboost import XGBClassifier
 import joblib
 from pathlib import Path
 from typing import Literal
 
-from config import MODEL_CONFIGS, MODELS_DIR, RANDOM_SEED
+try:
+    from .config import MODEL_CONFIGS, MODELS_DIR, RANDOM_SEED
+except ImportError:
+    from config import MODEL_CONFIGS, MODELS_DIR, RANDOM_SEED
+
+
+def _get_xgb_classifier():
+    try:
+        from xgboost import XGBClassifier
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "XGBoost is required for model_type='xgboost'. "
+            "Install project dependencies with `pip install -r requirements.txt`."
+        ) from exc
+    return XGBClassifier
 
 
 def create_model(
     model_type: Literal['random_forest', 'xgboost'] = 'random_forest'
-) -> RandomForestClassifier | XGBClassifier:
-    """
-    모델 생성
-
-    Args:
-        model_type: 모델 유형 ('random_forest' 또는 'xgboost')
-
-    Returns:
-        생성된 모델 객체
-    """
+) -> RandomForestClassifier | object:
+    'Create a model instance.'
     if model_type == 'random_forest':
         return RandomForestClassifier(**MODEL_CONFIGS['random_forest'])
     elif model_type == 'xgboost':
+        XGBClassifier = _get_xgb_classifier()
         return XGBClassifier(**MODEL_CONFIGS['xgboost'])
     else:
         raise ValueError(f"Unknown model type: {model_type}")
@@ -45,21 +48,9 @@ def train_model(
     X_val: pd.DataFrame = None,
     y_val: pd.Series = None
 ) -> dict:
-    """
-    모델 학습
+    'Machine learning model creation, training, evaluation, and persistence utilities.'
 
-    Args:
-        model: 학습할 모델
-        X_train: 훈련 데이터
-        y_train: 훈련 레이블
-        X_val: 검증 데이터 (옵션)
-        y_val: 검증 레이블 (옵션)
-
-    Returns:
-        학습된 모델 및 학습 정보
-    """
-    # XGBoost용 early stopping (검증 데이터가 있는 경우)
-    if isinstance(model, XGBClassifier) and X_val is not None:
+    if model.__class__.__name__ == 'XGBClassifier' and X_val is not None:
         model.fit(
             X_train, y_train,
             eval_set=[(X_val, y_val)],
@@ -76,17 +67,7 @@ def evaluate_model(
     X_test: pd.DataFrame,
     y_test: pd.Series
 ) -> dict:
-    """
-    모델 평가
-
-    Args:
-        model: 평가할 모델
-        X_test: 테스트 데이터
-        y_test: 테스트 레이블
-
-    Returns:
-        평가 지표 딕셔너리
-    """
+    'Machine learning model creation, training, evaluation, and persistence utilities.'
     y_pred = model.predict(X_test)
     y_prob = model.predict_proba(X_test)[:, 1]
 
@@ -105,16 +86,7 @@ def get_feature_importance(
     model,
     feature_names: list[str]
 ) -> pd.Series:
-    """
-    모델의 Feature Importance 추출
-
-    Args:
-        model: 학습된 모델
-        feature_names: 특성 이름 목록
-
-    Returns:
-        Feature Importance Series
-    """
+    'Machine learning model creation, training, evaluation, and persistence utilities.'
     if hasattr(model, 'feature_importances_'):
         importance = model.feature_importances_
     else:
@@ -124,36 +96,35 @@ def get_feature_importance(
 
 
 def save_model(model, name: str, model_dir: Path = MODELS_DIR):
-    """모델 저장"""
+    'Save a model to disk.'
     model_path = model_dir / f"{name}.pkl"
     joblib.dump(model, model_path)
     return model_path
 
 
 def load_model(name: str, model_dir: Path = MODELS_DIR):
-    """모델 로드"""
+    'Load a model from disk.'
     model_path = model_dir / f"{name}.pkl"
     return joblib.load(model_path)
 
 
 if __name__ == '__main__':
     import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'phase4_data'))
     from data_loader import prepare_dataset
 
     print("=" * 60)
-    print("모델 학습 및 평가 테스트")
+    print("Model training and evaluation test")
     print("=" * 60)
 
-    # 데이터 준비
-    print("\n[데이터 로딩]")
+
+    print("\n[Data loading]")
     data = prepare_dataset()
     print(f"X_train: {data['X_train'].shape}")
     print(f"X_val: {data['X_val'].shape}")
     print(f"X_test: {data['X_test'].shape}")
 
-    # RandomForest 학습 및 평가
-    print("\n[RandomForest 모델]")
+
+    print("\n[RandomForest model]")
     rf_model = create_model('random_forest')
     rf_model = train_model(rf_model, data['X_train'], data['y_train'])
     rf_metrics = evaluate_model(rf_model, data['X_test'], data['y_test'])
@@ -161,8 +132,8 @@ if __name__ == '__main__':
     print(f"  F1 Score: {rf_metrics['f1']:.4f}")
     print(f"  ROC-AUC: {rf_metrics['roc_auc']:.4f}")
 
-    # XGBoost 학습 및 평가
-    print("\n[XGBoost 모델]")
+
+    print("\n[XGBoost model]")
     xgb_model = create_model('xgboost')
     xgb_model = train_model(xgb_model, data['X_train'], data['y_train'],
                             data['X_val'], data['y_val'])
@@ -176,4 +147,4 @@ if __name__ == '__main__':
     rf_fi = get_feature_importance(rf_model, data['feature_names'])
     print(rf_fi.sort_values(ascending=False).head(5))
 
-    print("\n✅ 모델 테스트 완료!")
+    print("\n✅ Model test complete!")

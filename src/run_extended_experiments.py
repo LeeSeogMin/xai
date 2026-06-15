@@ -1,15 +1,4 @@
-"""
-Extended Experiments: MAR Simulation & DL FI Divergence
-Phase 5: Addressing Reviewer Feedback
-
-추가 실험:
-1. MAR (Missing At Random) vs MCAR 비교
-2. DL 모델 (MLP, AttentionNet) FI Divergence 분석
-
-리뷰어 피드백 대응:
-- "DL 모델 FI Divergence 분석 미완료" 해결
-- "MCAR만 테스트, MAR/MNAR 미포함" 해결 (MAR 추가)
-"""
+'Extended experiment runner for MAR and deep learning FI-divergence analyses.'
 
 import sys
 from pathlib import Path
@@ -22,10 +11,8 @@ import warnings
 from typing import Dict, List, Tuple
 import time
 
-# 경로 설정
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(0, str(PROJECT_ROOT / 'phase4_data'))
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).parent))
 
 from sklearn.model_selection import StratifiedKFold, train_test_split
@@ -35,7 +22,7 @@ from scipy.stats import spearmanr
 
 warnings.filterwarnings('ignore')
 
-# 설정
+
 from config import RESULTS_DIR, RANDOM_SEED, N_FOLDS
 
 # =============================================================================
@@ -48,13 +35,7 @@ def inject_missing_mcar(
     severity: float,
     seed: int = RANDOM_SEED
 ) -> Tuple[pd.DataFrame, List[str]]:
-    """
-    MCAR: Missing Completely At Random
-    결측이 완전히 무작위로 발생
-
-    Returns:
-        (corrupted_df, affected_features)
-    """
+    'Extended experiment runner for MAR and deep learning FI-divergence analyses.'
     np.random.seed(seed)
     X_corrupted = X.copy()
 
@@ -62,7 +43,7 @@ def inject_missing_mcar(
         if col in X.columns:
             mask = np.random.random(len(X)) < severity
             X_corrupted.loc[mask, col] = np.nan
-            # 중앙값으로 대체
+
             median_val = X[col].median()
             X_corrupted[col] = X_corrupted[col].fillna(median_val)
 
@@ -77,16 +58,7 @@ def inject_missing_mar(
     correlation_strength: float = 0.8,
     seed: int = RANDOM_SEED
 ) -> Tuple[pd.DataFrame, List[str]]:
-    """
-    MAR: Missing At Random
-    결측 확률이 target label (y)에 의존
-
-    - y=1인 샘플에서 결측 확률 높음 (severity * correlation_strength)
-    - y=0인 샘플에서 결측 확률 낮음 (severity * (1 - correlation_strength))
-
-    Returns:
-        (corrupted_df, affected_features)
-    """
+    'Extended experiment runner for MAR and deep learning FI-divergence analyses.'
     np.random.seed(seed)
     X_corrupted = X.copy()
     y_values = y.values if hasattr(y, 'values') else y
@@ -101,7 +73,7 @@ def inject_missing_mar(
             )
             mask = np.random.random(len(X)) < prob_missing
             X_corrupted.loc[mask, col] = np.nan
-            # 중앙값으로 대체
+
             median_val = X[col].median()
             X_corrupted[col] = X_corrupted[col].fillna(median_val)
 
@@ -109,19 +81,16 @@ def inject_missing_mar(
 
 
 def run_mar_comparison_experiments():
-    """
-    MCAR vs MAR 비교 실험 실행
-    데이터셋: UCI Adult
-    """
+    'Run mar comparison experiments.'
     print("=" * 60)
     print("Experiment 1: MCAR vs MAR Comparison")
     print("=" * 60)
 
-    from phase4_data.dataset_registry import create_default_registry
+    from dataset_registry import create_default_registry
     from models import create_model, train_model, evaluate_model
     from xai_analyzer import analyze_xai
 
-    # UCI Adult 로드
+
     print("\n[Loading UCI Adult dataset]")
     registry = create_default_registry()
     X, y = registry.get_dataset('uci_adult')
@@ -131,13 +100,13 @@ def run_mar_comparison_experiments():
     print(f"  Features: {X.shape[1]}")
     print(f"  Numerical: {config.numerical_features[:3]}...")
 
-    # 타겟 특성 (상위 3개 numerical)
+
     target_features = [f for f in config.numerical_features if f in X.columns][:3]
     print(f"  Target features for corruption: {target_features}")
 
     results = []
     severity_levels = [0.10, 0.20, 0.30]
-    n_folds = 5  # 시간 단축을 위해 5-fold
+    n_folds = 5
 
     skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=RANDOM_SEED)
 
@@ -149,7 +118,7 @@ def run_mar_comparison_experiments():
             y_train, y_test = y.iloc[train_idx].copy(), y.iloc[test_idx].copy()
 
             for model_type in ['random_forest', 'xgboost']:
-                # Baseline 모델 학습
+
                 model_baseline = create_model(model_type)
                 model_baseline = train_model(model_baseline, X_train, y_train)
                 baseline_metrics = evaluate_model(model_baseline, X_test, y_test)
@@ -165,7 +134,7 @@ def run_mar_comparison_experiments():
 
                 for severity in severity_levels:
                     for missing_type in ['mcar', 'mar']:
-                        # 결측 주입
+
                         if missing_type == 'mcar':
                             X_train_corrupted, _ = inject_missing_mcar(
                                 X_train, target_features, severity
@@ -175,7 +144,7 @@ def run_mar_comparison_experiments():
                                 X_train, y_train, target_features, severity
                             )
 
-                        # 손상된 데이터로 모델 재학습
+
                         model_corrupted = create_model(model_type)
                         model_corrupted = train_model(model_corrupted, X_train_corrupted, y_train)
                         corrupted_metrics = evaluate_model(model_corrupted, X_test, y_test)
@@ -189,7 +158,7 @@ def run_mar_comparison_experiments():
                         except:
                             fi_corrupted = pd.Series({col: 1.0/len(X_train.columns) for col in X_train.columns})
 
-                        # FI Divergence 계산
+
                         base_arr = np.array(list(fi_baseline.values))
                         corr_arr = np.array(list(fi_corrupted.values))
                         base_arr = base_arr / (base_arr.sum() + 1e-10)
@@ -212,14 +181,14 @@ def run_mar_comparison_experiments():
                         results.append(result)
                         pbar.update(1)
 
-    # 결과 저장
+
     results_df = pd.DataFrame(results)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     results_file = RESULTS_DIR / f'mar_comparison_results_{timestamp}.csv'
     results_df.to_csv(results_file, index=False)
     print(f"\n✓ Results saved: {results_file}")
 
-    # 요약 통계
+
     print("\n" + "=" * 60)
     print("MAR vs MCAR Summary")
     print("=" * 60)
@@ -238,10 +207,7 @@ def run_mar_comparison_experiments():
 # =============================================================================
 
 def run_dl_fi_divergence_experiments():
-    """
-    DL 모델 (MLP, AttentionNet) FI Divergence 실험
-    데이터셋: UCI Adult
-    """
+    'Run dl fi divergence experiments.'
     import torch
     from dl_models import TabularMLP, TabularAttentionNet, DLModelWrapper
     from dl_xai import DLXAIAnalyzer
@@ -253,15 +219,15 @@ def run_dl_fi_divergence_experiments():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Using device: {device}")
 
-    from phase4_data.dataset_registry import create_default_registry
+    from dataset_registry import create_default_registry
 
-    # UCI Adult 로드
+
     print("\n[Loading UCI Adult dataset]")
     registry = create_default_registry()
     X, y = registry.get_dataset('uci_adult')
     config = registry.get_config('uci_adult')
 
-    # 샘플링 (시간 단축)
+
     max_samples = 10000
     if len(X) > max_samples:
         X, _, y, _ = train_test_split(
@@ -276,13 +242,13 @@ def run_dl_fi_divergence_experiments():
     feature_names = list(X.columns)
 
     results = []
-    severity_levels = [0.10, 0.30]  # 대표 심각도만
+    severity_levels = [0.10, 0.30]
     quality_issues = ['missing', 'outlier', 'distribution_shift']
     n_folds = 5
 
     skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=RANDOM_SEED)
 
-    # DL 모델 설정
+
     dl_models = {
         'mlp': {
             'class': TabularMLP,
@@ -310,7 +276,7 @@ def run_dl_fi_divergence_experiments():
             y_test = y.iloc[test_idx].values
 
             for model_name, model_config in dl_models.items():
-                # Baseline 모델 학습
+
                 print(f"\n  Fold {fold_idx+1}, {model_name}: Training baseline...")
 
                 wrapper_baseline = DLModelWrapper(
@@ -323,7 +289,7 @@ def run_dl_fi_divergence_experiments():
                 )
                 wrapper_baseline.fit(X_train, y_train)
 
-                # Baseline 성능
+
                 y_pred = wrapper_baseline.predict(X_test)
                 baseline_accuracy = (y_pred == y_test).mean()
 
@@ -346,7 +312,7 @@ def run_dl_fi_divergence_experiments():
 
                 for issue_type in quality_issues:
                     for severity in severity_levels:
-                        # 품질 문제 주입
+
                         X_train_df = pd.DataFrame(X_train, columns=feature_names)
 
                         if issue_type == 'missing':
@@ -364,7 +330,7 @@ def run_dl_fi_divergence_experiments():
 
                         X_train_corrupted = X_train_corrupted.values
 
-                        # Corrupted 모델 학습
+
                         wrapper_corrupted = DLModelWrapper(
                             model_class=model_config['class'],
                             model_params=model_config['params'],
@@ -375,7 +341,7 @@ def run_dl_fi_divergence_experiments():
                         )
                         wrapper_corrupted.fit(X_train_corrupted, y_train)
 
-                        # Corrupted 성능
+
                         y_pred_corr = wrapper_corrupted.predict(X_test)
                         corrupted_accuracy = (y_pred_corr == y_test).mean()
 
@@ -396,7 +362,7 @@ def run_dl_fi_divergence_experiments():
                             print(f"    Corrupted XAI failed: {e}")
                             fi_corrupted = np.ones(X_train.shape[1]) / X_train.shape[1]
 
-                        # FI Divergence 계산
+
                         base_arr = np.abs(fi_baseline) / (np.abs(fi_baseline).sum() + 1e-10)
                         corr_arr = np.abs(fi_corrupted) / (np.abs(fi_corrupted).sum() + 1e-10)
 
@@ -418,14 +384,14 @@ def run_dl_fi_divergence_experiments():
                         results.append(result)
                         pbar.update(1)
 
-    # 결과 저장
+
     results_df = pd.DataFrame(results)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     results_file = RESULTS_DIR / f'dl_fi_divergence_results_{timestamp}.csv'
     results_df.to_csv(results_file, index=False)
     print(f"\n✓ Results saved: {results_file}")
 
-    # 요약 통계
+
     print("\n" + "=" * 60)
     print("DL FI Divergence Summary")
     print("=" * 60)
@@ -445,7 +411,7 @@ def inject_outlier(
     severity: float,
     seed: int = RANDOM_SEED
 ) -> pd.DataFrame:
-    """IQR 기반 이상치 주입"""
+    'Extended experiment runner for MAR and deep learning FI-divergence analyses.'
     np.random.seed(seed)
     X_corrupted = X.copy()
 
@@ -471,7 +437,7 @@ def inject_distribution_shift(
     severity: float,
     seed: int = RANDOM_SEED
 ) -> pd.DataFrame:
-    """분포 이동 주입"""
+    'Extended experiment runner for MAR and deep learning FI-divergence analyses.'
     np.random.seed(seed)
     X_corrupted = X.copy()
 
@@ -485,7 +451,7 @@ def inject_distribution_shift(
 
 
 def main():
-    """메인 실행"""
+    'Run the script entry point.'
     print("=" * 60)
     print("Extended Experiments: MAR & DL FI Divergence")
     print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -504,7 +470,7 @@ def main():
     print(f"All experiments completed in {elapsed/60:.1f} minutes")
     print(f"{'='*60}")
 
-    # 최종 요약
+
     print("\n" + "=" * 60)
     print("FINAL SUMMARY")
     print("=" * 60)

@@ -1,6 +1,17 @@
 # Data files (too large for GitHub)
-data/raw/
-data/processed/
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/unsw_nb15/
+data/raw/unsw_nb15/*
+!data/raw/unsw_nb15/.gitkeep
+!data/raw/creditcard/
+data/raw/creditcard/*
+!data/raw/creditcard/.gitkeep
+!data/raw/bank_marketing/
+data/raw/bank_marketing/*
+!data/raw/bank_marketing/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
 *.csv
 *.data
 *.test

@@ -53,15 +53,19 @@ Due to file size limitations, datasets are not included in this repository. Plea
 ### Data Preparation
 
 1. Download datasets from the links above
-2. Place raw files in `data/raw/` directory:
+2. Place raw files under `data/raw/`:
    ```
    data/
    ├── raw/
    │   ├── adult.data
    │   ├── adult.test
-   │   ├── UNSW_NB15_training-set.csv
-   │   ├── creditcard.csv
-   │   └── bank-additional-full.csv
+   │   ├── unsw_nb15/
+   │   │   ├── UNSW_NB15_training-set.csv
+   │   │   └── UNSW_NB15_testing-set.csv
+   │   ├── creditcard/
+   │   │   └── creditcard.csv
+   │   └── bank_marketing/
+   │       └── bank-additional-full.csv
    └── processed/
    ```
 3. Run preprocessing:
@@ -84,6 +88,8 @@ xai/
 │   ├── statistical_validation.py  # Cross-validation, CI, t-tests
 │   ├── traditional_baselines.py   # Z-score, IQR, KS, PSI baselines
 │   ├── visualizer.py           # Result visualization
+│   ├── dataset_registry.py      # Dataset registry
+│   ├── loaders/                 # Dataset-specific loaders
 │   └── config.py               # Configuration settings
 ├── data/
 │   ├── raw/                    # Raw dataset files (not included)
@@ -100,32 +106,33 @@ xai/
 ### Quick Start
 
 ```python
-from src.data_loader import load_dataset
-from src.quality_simulator import QualitySimulator
-from src.models import train_model
-from src.xai_analyzer import XAIAnalyzer
+from src.data_loader import prepare_dataset, NUMERICAL_COLS
+from src.quality_simulator import inject_missing_values
+from src.models import create_model, train_model
+from src.xai_analyzer import analyze_xai
 from src.metrics import compute_fi_divergence
 
-# Load dataset
-X_train, X_test, y_train, y_test = load_dataset('adult')
+# Load and preprocess UCI Adult
+data = prepare_dataset(scale=True)
+X_train, y_train = data['X_train'], data['y_train']
+X_test = data['X_test']
 
 # Train baseline model
-model = train_model(X_train, y_train, model_type='xgboost')
+model = create_model('xgboost')
+model = train_model(model, X_train, y_train)
 
 # Compute baseline feature importance
-analyzer = XAIAnalyzer(model, X_train)
-baseline_fi = analyzer.get_global_importance()
+baseline_fi = analyze_xai(model, X_train, X_test, method='shap', n_samples=100)
 
-# Inject quality problem
-simulator = QualitySimulator()
-X_corrupted = simulator.inject_missing(X_train, severity=0.2, mechanism='mcar')
+# Inject MCAR missingness into selected numerical features and impute medians
+X_corrupted = inject_missing_values(X_train, NUMERICAL_COLS[:3], severity=0.2)
+for col in NUMERICAL_COLS[:3]:
+    X_corrupted[col] = X_corrupted[col].fillna(X_train[col].median())
 
-# Train model on corrupted data
-model_corrupted = train_model(X_corrupted, y_train, model_type='xgboost')
-
-# Compute FI divergence
-analyzer_corrupted = XAIAnalyzer(model_corrupted, X_corrupted)
-corrupted_fi = analyzer_corrupted.get_global_importance()
+# Train model on corrupted data and compute FI divergence
+model_corrupted = create_model('xgboost')
+model_corrupted = train_model(model_corrupted, X_corrupted, y_train)
+corrupted_fi = analyze_xai(model_corrupted, X_corrupted, X_test, method='shap', n_samples=100)
 
 divergence = compute_fi_divergence(baseline_fi, corrupted_fi)
 print(f"JS Divergence: {divergence['js']:.4f}")
